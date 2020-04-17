@@ -1,7 +1,7 @@
 import click
 import pprint
 from pyfiglet import Figlet
-
+from ai_playground.config.config import Config
 from ai_playground.utils.logger import get_logger
 from ai_playground.utils.config_parser import load_cfg
 logger = get_logger(__name__)
@@ -14,14 +14,12 @@ logger = get_logger(__name__)
 def main(ctx, config: str, log2neptune: bool):
     figlet = Figlet(font='slant')
     click.echo(figlet.renderText("AI Playground"))
-
-    ctx.obj['config'] = config
-    ctx.obj['log2neptune'] = log2neptune
-
     cfg = load_cfg(config)
+    ctx.obj = Config(config=cfg)
+
     pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint("Configuration loaded: " + ctx.obj['config'])
-    pp.pprint(cfg)
+    pp.pprint("Configuration loaded: " + config)
+    pp.pprint(ctx.obj.get_config())
 
 
 @main.command()
