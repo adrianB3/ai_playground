@@ -35,7 +35,6 @@ def train(ctx):
     pp.pprint(dict(ctx.obj['config']))
 
     logger.info("Starting training")
-    logger.error("dummy error")
 
 
 
