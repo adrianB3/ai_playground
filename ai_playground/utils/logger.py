@@ -2,7 +2,7 @@ import logging
 import colorlog
 
 
-def get_logger(module) -> logging.Logger:
+def get_logger() -> logging.Logger:
     log_format = (
         '[%(asctime)s] '
         '[%(levelname)s] '
@@ -17,7 +17,7 @@ def get_logger(module) -> logging.Logger:
         f'{log_format}'
     )
     colorlog.basicConfig(format=colorlog_format, datefmt="%Y-%m-%d %H:%M:%S")
-    logger = logging.getLogger(module)
+    logger = logging.getLogger("ai_logger")
     logger.setLevel(logging.DEBUG)
 
     # Output full log

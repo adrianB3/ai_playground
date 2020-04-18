@@ -3,7 +3,7 @@ import os
 
 from ai_playground.utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def load_cfg(yaml_filepath):
