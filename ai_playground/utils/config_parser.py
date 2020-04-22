@@ -17,11 +17,12 @@ def load_cfg(yaml_filepath):
 
 def make_paths_absolute(dir_, cfg):
     for key in cfg.keys():
-        if key.endswith('_path'):
+        if key.endswith('_path') and cfg[key] is not None:
             cfg[key] = os.path.join(dir_, cfg[key])
             cfg[key] = os.path.abspath(cfg[key])
             if not os.path.isfile(cfg[key]):
                 logger.error("%s does not exist.", cfg[key])
+                raise OSError("Path does not exist.")
         if type(cfg[key]) is dict:
             cfg[key] = make_paths_absolute(dir_, cfg[key])
     return cfg

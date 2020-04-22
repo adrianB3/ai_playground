@@ -1,1 +1,6 @@
-neptune_project: adrianb3/ai-playground
+utils:
+  neptune_project: adrianb3/ai-playground # neptune.ai project name
+environment:
+  env_path: # ../../../ai_playground_build/ai_playground.exe
+  time_scale: 2.0 # env time acceleration as multiplication factor over real-time
+  behavior_name: CarBrain?team=0

@@ -11,7 +11,7 @@ repo = Repo(path='.', search_parent_directories=True)
 
 
 def init_neptune(ctx: click.Context):
-    project = ctx.obj['config']['neptune_project']
+    project = ctx.obj['config']['utils']['neptune_project']
     neptune.init(project)
     gitInfo = GitInfo(
         commit_id=repo.head.commit,
