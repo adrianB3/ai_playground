@@ -3,10 +3,12 @@ import pprint
 import neptune
 from pyfiglet import Figlet
 from datetime import datetime
+
+from ai_playground.selfdrive.train import Trainer
 from ai_playground.utils.logger import get_logger
 from ai_playground.utils.config_parser import load_cfg
 from ai_playground.utils.exp_data import init_neptune
-from ai_playground.hrl_selfdrive.environment import SelfDriveEnvironment
+from ai_playground.selfdrive.environment import SelfDriveEnvironment
 logger = get_logger()
 
 
@@ -36,9 +38,8 @@ def train(ctx):
     pp.pprint(dict(ctx.obj['config']))
 
     logger.info("Starting training")
-    sfd = SelfDriveEnvironment(ctx)
-    act = sfd.action_spec()
-    print()
+    trainer = Trainer(ctx)
+    trainer.train()
     if ctx.obj['log2neptune']:
         neptune.stop()
 
