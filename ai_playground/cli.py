@@ -8,7 +8,6 @@ from ai_playground.selfdrive.train import Trainer
 from ai_playground.utils.logger import get_logger
 from ai_playground.utils.config_parser import load_cfg
 from ai_playground.utils.exp_data import init_neptune
-from ai_playground.selfdrive.environment import SelfDriveEnvironment
 logger = get_logger()
 
 

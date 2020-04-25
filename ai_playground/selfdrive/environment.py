@@ -6,7 +6,6 @@ from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.side_channel.engine_configuration_channel import EngineConfig, EngineConfigurationChannel
 from tf_agents.specs import ArraySpec, BoundedArraySpec
 from tf_agents.trajectories import time_step as ts
-from tf_agents.trajectories.time_step import TimeStep
 
 from ai_playground.utils.logger import get_logger
 
