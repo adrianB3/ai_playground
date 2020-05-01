@@ -24,10 +24,11 @@ def init_unity_env(ctx: click.Context):
         height=768
     )
     env = UnityEnvironment(
-        base_port=5004,
+        # base_port=5004,
         file_name=env_path,
         side_channels=[engine_configuration_channel],
-        no_graphics=False
+        no_graphics=False,
+        timeout_wait=120
     )
     return env
 
@@ -37,7 +38,7 @@ class SelfDriveEnvironment(py_environment.PyEnvironment):
         super().__init__()
         self._env_config = ctx.obj['config']['environment']
         self._env: UnityEnvironment = init_unity_env(ctx)
-
+        logger.debug("Communicator is on: " + str(self._env.communicator.is_open))
         self._episode_ended = False
         self._env.reset()
 
@@ -66,22 +67,23 @@ class SelfDriveEnvironment(py_environment.PyEnvironment):
     def _step(self, action):
         if self._episode_ended:
             return self._reset()
+        self._env.set_actions(
+            behavior_name=self._env_config['behavior_name'],
+            action=action
+        )
+        self._env.step()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
         if len(decision_steps) > 0:
-            self._env.set_actions(
-                behavior_name=self._env_config['behavior_name'],
-                action=action
-            )
-            self._env.step()
             self._episode_ended = False
+            # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             # cv2.imshow("obs", decision_steps[0].obs[0])
             # cv2.waitKey(0)
-            return ts.transition(decision_steps[0].obs[0], decision_steps[0].reward)
+            return ts.transition(decision_steps[1].obs[0], decision_steps[1].reward)
         else:
-            decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
+            # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             if len(terminal_steps) > 0:
                 self._episode_ended = True
-                return ts.termination(terminal_steps[0].obs[0], terminal_steps[0].reward)
+                return ts.termination(terminal_steps[1].obs[0], terminal_steps[1].reward)
 
         return 1
 
@@ -89,4 +91,7 @@ class SelfDriveEnvironment(py_environment.PyEnvironment):
         self._episode_ended = False
         self._env.reset()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
-        return ts.restart(decision_steps[0].obs[0])
+        if len(decision_steps) > 0:
+            return ts.restart(decision_steps[1].obs[0])
+        elif len(terminal_steps) > 0:
+            return ts.restart(terminal_steps[1].obs[0])

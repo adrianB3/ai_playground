@@ -1,8 +1,8 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
 environment:
-  env_path: # ../../../ai_playground_build/ai_playground.exe
-  time_scale: 3.0 # env time acceleration as multiplication factor over real-time
+  env_path: ../../../ai_playground_build/ai_playground.exe
+  time_scale: 4.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
 algorithm:
   algo_type: ppo
@@ -11,11 +11,11 @@ algorithm:
       optimizer: adam
       optimizer_params:
         adam:
-          learning_rate: 0.04
+          learning_rate: 0.00004
           epsilon: 0.00001
       ppo_actor_net: actor_rnn
       ppo_value_net: value_rnn
-      num_epochs: 3
+      num_epochs: 10
       discount_factor: 0.995
       gradient_clipping: 0.5
       entropy_regularization: 0.01
@@ -33,5 +33,5 @@ algorithm:
 train_session:
   num_env_steps: 300000
   num_parallel_envs: 4
-  collect_eps_per_iter: 5
-  replay_buff_capacity: 301
+  collect_eps_per_iter: 3
+  replay_buff_capacity: 401
