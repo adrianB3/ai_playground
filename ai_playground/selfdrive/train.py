@@ -3,77 +3,34 @@ import time
 import click
 import tensorflow as tf
 
-from tf_agents.agents.ppo import ppo_agent
 from tf_agents.agents.tf_agent import TFAgent
 from tf_agents.drivers import dynamic_episode_driver
 from tf_agents.environments import tf_py_environment
 from tf_agents.metrics import tf_metrics
-from tf_agents.networks.actor_distribution_rnn_network import ActorDistributionRnnNetwork
-from tf_agents.networks.value_rnn_network import ValueRnnNetwork
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
-from tf_agents.specs import tensor_spec
 
-from ai_playground.selfdrive.environment import SelfDriveEnvironment
+from ai_playground.selfdrive.agents import PPOAgent, HAgent
+from ai_playground.selfdrive.environments import SelfDriveEnvironment
 
 
 class AlgorithmManager:
     def __init__(self, ctx: click.Context):
+        self.ctx = ctx
         self.tf_env: tf_py_environment.TFPyEnvironment = tf_py_environment.TFPyEnvironment(SelfDriveEnvironment(ctx))
         self.train_step_counter = tf.compat.v1.train.get_or_create_global_step()
         self.tf_agent: TFAgent = self.get_agent(
-            algo_type=ctx.obj['config']['algorithm']['algo_type'],
-            params=ctx.obj['config']['algorithm']['params'][ctx.obj['config']['algorithm']['algo_type']]
+            algorithm_type=ctx.obj['config']['algorithm']['name']
         )
         self.tf_agent.initialize()
 
-    def get_agent(self, algo_type: str, params: dict):
-        if algo_type == 'ppo':
-            agent = ppo_agent.PPOAgent(
-                time_step_spec=self.tf_env.time_step_spec(),
-                action_spec=self.tf_env.action_spec(),
-                optimizer=self.get_optimizer(params['optimizer'], params['optimizer_params'][params['optimizer']]),
-                actor_net=self.create_netowork(params['ppo_actor_net']),
-                value_net=self.create_netowork(params['ppo_value_net']),
-                num_epochs=params['num_epochs'],
-                train_step_counter=self.train_step_counter,
-                discount_factor=params['discount_factor'],
-                gradient_clipping=params['gradient_clipping'],
-                entropy_regularization=params['entropy_regularization'],
-                importance_ratio_clipping=params['importance_ratio_clipping'],
-                use_gae=params['use_gae'],
-                use_td_lambda_return=params['use_td_lambda_return']
-            )
+    def get_agent(self, algorithm_type: str):
+        if algorithm_type == 'ppo':
+            agent = PPOAgent(self.ctx).create_ppo_agent(self.tf_env, self.train_step_counter)
             return agent
-        if algo_type == 'hrl':
-            return 1
-
-    def create_netowork(self, network_type: str):
-        if network_type == 'actor_rnn':
-            return ActorDistributionRnnNetwork(
-                input_tensor_spec=self.tf_env.observation_spec(),
-                output_tensor_spec=self.tf_env.action_spec(),
-                conv_layer_params=[(16, 8, 4), (32, 4, 2)],
-                input_fc_layer_params=(256, ),
-                lstm_size=(256, ),
-                output_fc_layer_params=(128, ),
-                activation_fn=tf.nn.elu
-            )
-        if network_type == 'value_rnn':
-            return ValueRnnNetwork(
-                input_tensor_spec=self.tf_env.observation_spec(),
-                conv_layer_params=[(16, 8, 4), (32, 4, 2)],
-                input_fc_layer_params=(256, ),
-                lstm_size=(256, ),
-                output_fc_layer_params=(128, ),
-                activation_fn=tf.nn.elu
-            )
-
-    def get_optimizer(self, optimizer_type: str, params: dict):
-        if optimizer_type == 'adam':
-            return tf.compat.v1.train.AdamOptimizer(
-                learning_rate=params['learning_rate'],
-                epsilon=params['epsilon']
-            )
+        if algorithm_type == 'hrl':
+            pass
+            # agent = HAgent(self.ctx)
+            # return agent
 
 
 class Trainer:
