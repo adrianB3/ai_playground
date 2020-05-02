@@ -1,4 +1,5 @@
 import click
+import tensorflow as tf
 from tf_agents.agents.ppo import ppo_agent
 from tf_agents.agents.tf_agent import TFAgent
 from tf_agents.environments.tf_environment import TFEnvironment
@@ -33,9 +34,18 @@ class PPOAgent:
 
 
 class HAgent(TFAgent):
-    def __init__(self, ctx: click.Context, time_step_spec, action_spec, policy, collect_policy, train_sequence_length):
+    def __init__(
+            self, ctx: click.Context,
+            time_step_spec,
+            action_spec,
+            policy,
+            collect_policy,
+            train_sequence_length,
+            name=None
+            ):
         super().__init__(time_step_spec, action_spec, policy, collect_policy, train_sequence_length)
         self.config = ctx.obj['config']
+        tf.Module.__init__(name=name)
 
     def _initialize(self):
         pass

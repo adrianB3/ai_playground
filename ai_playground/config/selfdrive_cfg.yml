@@ -1,5 +1,6 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
+  experiments_dir: E:\repos\ai_playground_experiments # where the experiments data should be stored
 environment:
   env_path: ../../../ai_playground_build/ai_playground.exe
   time_scale: 4.0 # env time acceleration as multiplication factor over real-time

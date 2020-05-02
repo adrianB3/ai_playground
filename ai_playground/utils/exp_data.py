@@ -1,13 +1,26 @@
+import os
+
 import neptune
 import click
 import socket
 import datetime
+
 from neptune.git_info import GitInfo
 from git import Repo
-
+from pathlib import Path
 from ai_playground.utils.logger import get_logger
 
+logger = get_logger()
 repo = Repo(path='.', search_parent_directories=True)
+
+
+def create_exp_local(experiments_dir, exp_name):
+    now = datetime.datetime.now().strftime("%d-%m-%Y_%H_%M_%S")
+    exp_dir = os.path.join(experiments_dir, exp_name, exp_name + "_" + now)
+    if not os.path.exists(exp_dir):
+        os.makedirs(exp_dir, 0o755)
+        logger.info("Experiment data folder: " + str(Path(exp_dir)))
+    return exp_dir
 
 
 def init_neptune(ctx: click.Context):

@@ -7,16 +7,16 @@ from datetime import datetime
 from ai_playground.selfdrive.train import Trainer
 from ai_playground.utils.logger import get_logger
 from ai_playground.utils.config_parser import load_cfg
-from ai_playground.utils.exp_data import init_neptune
 logger = get_logger()
 
 
 @click.group()
-@click.option('--exp_name', default='exp_' + datetime.now().strftime("%d/%m/%Y_%H:%M:%S"), help='The experiment name.')
+@click.option('--exp_name', required=True, default='exp_' + datetime.now().strftime("%d/%m/%Y_%H:%M:%S"), help='The experiment name.')
 @click.option('--config', help='Training configuration file.')
 @click.option('--log2neptune/--no-log2neptune', default=False, help='Choose whether to log to neptune or not.')
+@click.option('-load', '--load_exp', type=str, help('Load experiment from selected dir.'))
 @click.pass_context
-def main(ctx, config: str, log2neptune: bool, exp_name: str):
+def main(ctx, config: str, log2neptune: bool, exp_name: str, load_exp: bool):
     figlet = Figlet(font='slant')
     click.echo(figlet.renderText("AI Playground"))
     cfg = load_cfg(config)
@@ -24,9 +24,7 @@ def main(ctx, config: str, log2neptune: bool, exp_name: str):
     ctx.obj['config_file'] = config
     ctx.obj['config'] = cfg
     ctx.obj['log2neptune'] = log2neptune
-    if log2neptune:
-        exp = init_neptune(ctx)
-        logger.info("This experiment is logged to neptune.ai")
+    ctx.obj['load_exp'] = load_exp
 
 
 @main.command()
@@ -39,8 +37,6 @@ def train(ctx):
     logger.info("Starting training")
     trainer = Trainer(ctx)
     trainer.train()
-    if ctx.obj['log2neptune']:
-        neptune.stop()
 
 
 def start():
