@@ -96,6 +96,7 @@ dependencies:
     - packaging==20.3
     - pandas==1.0.3
     - pillow==7.1.2
+    - psutil==5.7.0
     - py3nvml==0.2.6
     - pyfiglet==0.8.post1
     - pyparsing==2.4.7
