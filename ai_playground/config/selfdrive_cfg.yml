@@ -2,11 +2,13 @@ utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
 environment:
-  env_path: ../../../ai_playground_build/ai_playground.exe
+  env_path: #../../../ai_playground_build/ai_playground.exe
   time_scale: 4.0 # env time acceleration as multiplication factor over real-time
+  behavior_name_high_lvl: abstract_brain?team=0
+  behavior_name_low_lvl: primitive_brain?team=0
   behavior_name: CarBrain?team=0
 algorithm:
-  name: ppo
+  name: haar
   params:
     ppo:
       optimizer: adam
@@ -14,8 +16,8 @@ algorithm:
         adam:
           learning_rate: 0.00004
           epsilon: 0.00001
-      ppo_actor_net: actor_rnn
-      ppo_value_net: value_rnn
+      ppo_actor_net: actor_pre_proj
+      ppo_value_net: value_rnn_pre
       num_epochs: 10
       discount_factor: 0.995
       gradient_clipping: 0.5
@@ -24,13 +26,15 @@ algorithm:
       use_gae: True
       use_td_lambda_return: True
 
-    hrl:
-      optimizer: adam
-      optimizer_params:
-        adam:
-          learning_rate: 0.005
-          epsilon: 1e-5
-      num_epochs: 5
+    haar:
+      num_eps: 1000 # N - number of episodes
+      k_s: 10 # min number of steps after which a high level action is required
+      k_0: 100 # initial number of steps after which a high level action is required
+      num_skills: 2
+      num_low_lvl_steps: 1000 # T - nb of low level steps for each high level step
+      discount_factor_high_lvl: 0.995
+      discount_factor_low_lvl: 0.995
+      policy_optimizer: ppo
 train_session:
   num_env_steps: 300000
   num_parallel_envs: 4
