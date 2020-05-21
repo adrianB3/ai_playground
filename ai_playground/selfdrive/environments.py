@@ -131,9 +131,9 @@ class HighLvlEnv(py_environment.PyEnvironment):
         return {'image': obs_spec_vis, 'vector': obs_spec_vec}
 
     def action_spec(self):
-        unity_behaviour_spec = self._env.get_behavior_spec(self._env_config['behavior_name'])
+        # unity_behaviour_spec = self._env.get_behavior_spec(self._env_config['behavior_name'])
         action_spec = BoundedArraySpec(
-            shape=(),
+            shape=[1],
             dtype=np.int32,
             minimum=0,
             maximum=self.ctx.obj['config']['algorithm']['params']['haar']['num_skills'],
@@ -197,7 +197,7 @@ class LowLvlEnv(py_environment.PyEnvironment):
             maximum=255,
             name="low_lvl_visual_observations")
         obs_spec_vec = BoundedArraySpec(
-            shape=(),
+            shape=[1],
             dtype=np.int32,
             minimum=0,
             maximum=self.ctx.obj['config']['algorithm']['params']['haar']['num_skills'],

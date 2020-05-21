@@ -2,7 +2,7 @@ utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
 environment:
-  env_path: #../../../ai_playground_build/ai_playground.exe
+  env_path: ../../../ai_playground_build/ai_playground.exe
   time_scale: 4.0 # env time acceleration as multiplication factor over real-time
   behavior_name_high_lvl: abstract_brain?team=0
   behavior_name_low_lvl: primitive_brain?team=0
@@ -16,8 +16,8 @@ algorithm:
         adam:
           learning_rate: 0.00004
           epsilon: 0.00001
-      ppo_actor_net: actor_pre_proj
-      ppo_value_net: value_rnn_pre
+      ppo_actor_net: actor_preproc
+      ppo_value_net: value_preproc
       num_epochs: 10
       discount_factor: 0.995
       gradient_clipping: 0.5

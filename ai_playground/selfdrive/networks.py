@@ -33,10 +33,10 @@ def create_network(network_type: str, observation_spec, action_spec):
     preprocessing_layers = {
         'image': tf.keras.models.Sequential([
                                             tf.keras.layers.Conv2D(8, 4, input_shape=(100, 250, 1)),
-                                            tf.keras.layers.Flatten()]),
-        'vector': tf.keras.layers.Dense(4)
+                                            tf.keras.layers.Flatten()], name='preprocess_image_layers'),
+        'vector': tf.keras.models.Sequential([tf.keras.layers.Dense(1)], name='preprocess_vector_layers')
     }
-    preprocessing_combiner = tf.keras.layers.Concatenate(axis=-1)
+    preprocessing_combiner = tf.keras.models.Sequential([tf.keras.layers.Concatenate(axis=-1, name='preprocess_combiner')])
     if network_type == 'actor_rnn':
         return ActorDistributionRnnNetwork(
             input_tensor_spec=observation_spec,
