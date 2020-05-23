@@ -133,7 +133,7 @@ class HighLvlEnv(py_environment.PyEnvironment):
     def action_spec(self):
         # unity_behaviour_spec = self._env.get_behavior_spec(self._env_config['behavior_name'])
         action_spec = BoundedArraySpec(
-            shape=[1],
+            shape=(1, ),
             dtype=np.int32,
             minimum=0,
             maximum=self.ctx.obj['config']['algorithm']['params']['haar']['num_skills'],
@@ -158,12 +158,12 @@ class HighLvlEnv(py_environment.PyEnvironment):
             # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             # cv2.imshow("obs", decision_steps[0].obs[0])
             # cv2.waitKey(0)
-            return ts.transition(decision_steps[1].obs[0], decision_steps[1].reward)
+            return ts.transition(decision_steps[1].obs, decision_steps[1].reward)
         else:
             # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             if len(terminal_steps) > 0:
                 self._episode_ended = True
-                return ts.termination(terminal_steps[1].obs[0], terminal_steps[1].reward)
+                return ts.termination(terminal_steps[1].obs, terminal_steps[1].reward)
 
         return 1
 
@@ -172,9 +172,9 @@ class HighLvlEnv(py_environment.PyEnvironment):
         self._env.reset()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
         if len(decision_steps) > 0:
-            return ts.restart(decision_steps[1].obs[0])
+            return ts.restart(decision_steps[1].obs)
         elif len(terminal_steps) > 0:
-            return ts.restart(terminal_steps[1].obs[0])
+            return ts.restart(terminal_steps[1].obs)
 
 
 class LowLvlEnv(py_environment.PyEnvironment):
@@ -197,7 +197,7 @@ class LowLvlEnv(py_environment.PyEnvironment):
             maximum=255,
             name="low_lvl_visual_observations")
         obs_spec_vec = BoundedArraySpec(
-            shape=[1],
+            shape=(1, ),
             dtype=np.int32,
             minimum=0,
             maximum=self.ctx.obj['config']['algorithm']['params']['haar']['num_skills'],
@@ -232,12 +232,12 @@ class LowLvlEnv(py_environment.PyEnvironment):
             # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             # cv2.imshow("obs", decision_steps[0].obs[0])
             # cv2.waitKey(0)
-            return ts.transition(decision_steps[1].obs[0], decision_steps[1].reward)
+            return ts.transition(decision_steps[1].obs, decision_steps[1].reward)
         else:
             # decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
             if len(terminal_steps) > 0:
                 self._episode_ended = True
-                return ts.termination(terminal_steps[1].obs[0], terminal_steps[1].reward)
+                return ts.termination(terminal_steps[1].obs, terminal_steps[1].reward)
 
         return 1
 
@@ -246,7 +246,7 @@ class LowLvlEnv(py_environment.PyEnvironment):
         self._env.reset()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
         if len(decision_steps) > 0:
-            return ts.restart(decision_steps[1].obs[0])
+            return ts.restart(decision_steps[1].obs)
         elif len(terminal_steps) > 0:
-            return ts.restart(terminal_steps[1].obs[0])
+            return ts.restart(terminal_steps[1].obs)
 

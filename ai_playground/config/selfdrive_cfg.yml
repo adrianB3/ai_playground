@@ -18,7 +18,7 @@ algorithm:
           epsilon: 0.00001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
-      num_epochs: 10
+      num_epochs: 1
       discount_factor: 0.995
       gradient_clipping: 0.5
       entropy_regularization: 0.01
@@ -31,7 +31,7 @@ algorithm:
       k_s: 10 # min number of steps after which a high level action is required
       k_0: 100 # initial number of steps after which a high level action is required
       num_skills: 2
-      num_low_lvl_steps: 1000 # T - nb of low level steps for each high level step
+      num_low_lvl_steps: 300 # T - nb of low level steps for each high level step
       discount_factor_high_lvl: 0.995
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
