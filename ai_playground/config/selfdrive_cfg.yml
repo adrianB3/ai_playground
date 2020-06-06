@@ -29,9 +29,9 @@ algorithm:
     haar:
       num_eps: 1000 # N - number of episodes
       k_s: 10 # min number of steps after which a high level action is required
-      k_0: 100 # initial number of steps after which a high level action is required
+      k_0: 200 # number of low level steps
       num_skills: 2
-      num_low_lvl_steps: 300 # T - nb of low level steps for each high level step
+      j: 10 # number of ep for high level training
       discount_factor_high_lvl: 0.995
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo

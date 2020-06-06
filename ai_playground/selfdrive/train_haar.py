@@ -5,7 +5,6 @@ import gin
 import tensorflow as tf
 import numpy as np
 from mlagents_envs.environment import UnityEnvironment
-from tf_agents.agents import PPOAgent
 from tf_agents.drivers import driver
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver, is_bandit_env
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
@@ -113,25 +112,24 @@ class SelfDriveAgent:
             ckpt_dir=self.h_checkpoint_dir,
             max_to_keep=1,
             agent=self.high_lvl_agent,
-            policy=self.high_lvl_agent.tf_agent.policy,
+            policy=self.high_lvl_agent.policy,
             replay_buffer=self.high_lvl_replay_buffer,
             global_step=self.high_lvl_agent.train_step_counter
         )
         self.h_tf_policy_saver_dir = os.path.join(self.exp_dir, 'h_policy')
-        self.h_tf_policy_saver = PolicySaver(self.high_lvl_agent.tf_agent.policy)
+        self.h_tf_policy_saver = PolicySaver(self.high_lvl_agent.policy)
 
         self.l_checkpoint_dir = os.path.join(self.exp_dir, 'l_checkpoints')
         self.l_checkpointer = Checkpointer(
             ckpt_dir=self.l_checkpoint_dir,
             max_to_keep=1,
             agent=self.low_lvl_agent,
-            policy=self.low_lvl_agent.tf_agent.policy,
+            policy=self.low_lvl_agent.policy,
             replay_buffer=self.modified_low_lvl_rep_buffer,
             global_step=self.low_lvl_agent.train_step_counter
         )
         self.l_tf_policy_saver_dir = os.path.join(self.exp_dir, 'l_policy')
-        self.l_tf_policy_saver = PolicySaver(self.low_lvl_agent.tf_agent.policy)
-
+        self.l_tf_policy_saver = PolicySaver(self.low_lvl_agent.policy)
 
     def train(self):
         # tf.keras.utils.plot_model(
@@ -140,48 +138,61 @@ class SelfDriveAgent:
         # )
         self.k_0 = self.haar_config['k_0']
         self.k_s = self.haar_config['k_s']
-        step_metrics = [
-            tf_metrics.NumberOfEpisodes(),
+        self.j = self.haar_config['j']
+        h_step_observers = [
             tf_metrics.EnvironmentSteps(),
             tf_metrics.AverageReturnMetric(),
-            tf_metrics.AverageEpisodeLengthMetric()
+            tf_metrics.AverageEpisodeLengthMetric(),
+            self.high_lvl_replay_buffer.add_batch
+        ]
+
+        l_step_observers = [
+            tf_metrics.EnvironmentSteps(),
+            tf_metrics.AverageReturnMetric(),
+            tf_metrics.AverageEpisodeLengthMetric(),
+            self.low_lvl_replay_buffer.add_batch
         ]
 
         high_lvl_driver = DynamicStepDriver(
             env=self.high_lvl_env,
             policy=self.high_lvl_agent.collect_policy,
-            observers=[self.high_lvl_replay_buffer.add_batch, step_metrics],
+            observers=h_step_observers,
             num_steps=1
         )
         low_lvl_driver = HaarLowLvlDriver(
             env=self.low_lvl_env,
             policy=self.low_lvl_agent.collect_policy,
-            observers=[self.low_lvl_replay_buffer.add_batch, step_metrics],
+            observers=l_step_observers,
             num_steps=1
         )
-        for ep_count in range(0, self.haar_config['num_eps']):
-            for low_lvl_step_count in range(0, self.haar_config['num_low_lvl_steps']):
-                if low_lvl_step_count % self.k_0 == 0:
-                    high_lvl_driver._num_steps = 1
-                    high_lvl_driver.run()
-                    high_lvl_dataset = self.high_lvl_replay_buffer.as_dataset(sample_batch_size=1)
-                    high_lvl_iter = iter(high_lvl_dataset)
-                    h_exp, _ = next(high_lvl_iter)
 
-                    high_lvl_action = h_exp.action
+        high_lvl_driver._num_steps = 1
+        high_lvl_driver.run()
+        high_lvl_dataset = self.high_lvl_replay_buffer.as_dataset(sample_batch_size=1)
+        high_lvl_iter = iter(high_lvl_dataset)
+        h_exp_prev, _ = next(high_lvl_iter)
 
-                    low_lvl_driver._num_steps = self.k_0
-                    low_lvl_driver.run(high_lvl_action=high_lvl_action)
+        for ep_count in range(1, self.haar_config['num_eps'] + 1):
+            sds = list(self.unity_env.side_channels.values())
+            sds[1].set_float_parameter("num_steps", self.k_0 * self.j)
+            high_lvl_action = h_exp_prev.action
+            low_lvl_driver._num_steps = self.k_0
+            low_lvl_driver.run(high_lvl_action=high_lvl_action)
 
-            exp = self.high_lvl_replay_buffer.gather_all()
-            self.high_lvl_agent.train(exp)
+            if ep_count % self.j == 0:
+                exp = self.high_lvl_replay_buffer.gather_all()
+                self.high_lvl_agent.train(exp)
+                self.high_lvl_replay_buffer.clear()
+                print("High level trained.")
+                self.high_lvl_env.reset()
+                self.low_lvl_env.reset()
+                self.unity_env.reset()
 
-            advs = self.high_lvl_agent.normalized_adv
-            modified_rewards = tf.math.scalar_mul(1 / self.k_0, advs)
-            sliced_mod_rewards = []
-            for i in range(0, int(self.haar_config['num_low_lvl_steps'] / self.k_0) - 1):
-                slice = tf.slice(modified_rewards, [0, i], [-1, 1])
-                sliced_mod_rewards.append(slice)
+            # modified_rewards = tf.math.scalar_mul(1 / self.k_0, advs)
+            # sliced_mod_rewards = []
+            # for i in range(0, int(self.k_0) - 1):
+            #     slice = tf.slice(modified_rewards, [0, i], [-1, 1])
+            #     sliced_mod_rewards.append(slice)
 
             # new_low_lvl_dataset: MapDataset = MapDataset()
             # for el in low_lvl_dataset:
@@ -211,17 +222,35 @@ class SelfDriveAgent:
             #     updates = tf.constant([rew])
             #     tf.tensor_scatter_nd_update(l_exp.reward, indices, updates)
             low_lvl_dataset = self.low_lvl_replay_buffer.as_dataset(sample_batch_size=1)
-            low_lvl_dataset = low_lvl_dataset.map(self.modify_reward)
             iterator = iter(low_lvl_dataset)
 
-            for _ in range(self.haar_config['num_low_lvl_steps']):
+            # calculare r_t^h
+            low_lvl_cumulative_reward = 0
+            for _ in range(self.k_0):
+                traj, _ = next(iterator)
+                low_lvl_cumulative_reward += traj.reward.numpy()
+
+            high_lvl_driver._num_steps = 1
+            high_lvl_driver.run()
+            high_lvl_dataset = self.high_lvl_replay_buffer.as_dataset(sample_batch_size=1)
+            high_lvl_iter = iter(high_lvl_dataset)
+            h_exp_current, _ = next(high_lvl_iter)
+
+            self.advantage = self.calculate_advantage(low_lvl_cumulative_reward, h_exp_current, h_exp_prev)
+
+            low_lvl_dataset = low_lvl_dataset.map(self.modify_reward)
+            iterator = iter(low_lvl_dataset)
+            for _ in range(self.k_0):
                 transition, _ = next(iterator)
                 values_batched = tf.nest.map_structure(lambda t: tf.stack([t] * 1), transition)
                 self.modified_low_lvl_rep_buffer.add_batch(values_batched)
 
-
             low_lvl_exp = self.modified_low_lvl_rep_buffer.gather_all()
             loss = self.low_lvl_agent.train(low_lvl_exp)
+            print("Low level trained.")
+
+            print("Ep count: " + str(ep_count))
+            print("l_lvl env_steps: " + str(l_step_observers[0].result().numpy()))
 
             self.h_checkpointer.save(self.high_lvl_agent.train_step_counter)
             self.h_tf_policy_saver.save(self.h_tf_policy_saver_dir)
@@ -233,16 +262,24 @@ class SelfDriveAgent:
 
             if self.ctx.obj['log2neptune']:
                 pass
-
-            self.high_lvl_replay_buffer.clear()
+            h_exp_prev = h_exp_current
             self.low_lvl_replay_buffer.clear()
             self.modified_low_lvl_rep_buffer.clear()
 
-
     def modify_reward(self, traj, buff):
         new_trajectory = Trajectory(traj.step_type, traj.observation, traj.action, traj.policy_info,
-                                    traj.next_step_type, tf.math.scalar_mul(1 / self.k_0, traj.reward), traj.discount)
+                                    traj.next_step_type, self.advantage, traj.discount)
         return (new_trajectory, buff)
+
+    def calculate_advantage(self, cumulative_reward, h_experience_current, h_experience_prev):
+        h_value_estimate_current, _ = self.high_lvl_agent.collect_policy.apply_value_network(
+            h_experience_current.observation, h_experience_current.step_type, value_state=(),
+            training=False)
+        h_value_estimate_prev, _ = self.high_lvl_agent.collect_policy.apply_value_network(
+            h_experience_prev.observation, h_experience_prev.step_type, value_state=(),
+            training=False)
+        adv = (1/self.k_0) * (cumulative_reward + self.haar_config['discount_factor_high_lvl'] * h_value_estimate_current.numpy() - h_value_estimate_prev.numpy())
+        return adv
 
 
 @gin.configurable
@@ -568,6 +605,7 @@ class HighLvlDriver(driver.Driver):
 def create_network(name: str, input_spec, output_spec):
     preprocessing_layers = {
         'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3)),
+                                             # tf.keras.layers.Conv2D(16, (3, 3)),
                                              tf.keras.layers.Flatten()]),
         'vector': tf.keras.layers.Dense(4)
     }

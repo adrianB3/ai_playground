@@ -1,6 +1,7 @@
 import click
 import cv2
 import numpy as np
+from mlagents_envs.side_channel.environment_parameters_channel import EnvironmentParametersChannel
 from tf_agents.environments import py_environment
 from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.side_channel.engine_configuration_channel import EngineConfig, EngineConfigurationChannel
@@ -24,15 +25,19 @@ class UnityEnv:
         if env_path is None:
             logger.warning("env_path is None, running in editor")
         engine_configuration_channel = EngineConfigurationChannel()
+        env_param_channel = EnvironmentParametersChannel()
         engine_configuration_channel.set_configuration_parameters(
             time_scale=env_cfg['time_scale'],
             width=1366,
             height=768
         )
+        k = self.ctx.obj['config']['algorithm']['params']['haar']['k_0']
+        j = self.ctx.obj['config']['algorithm']['params']['haar']['j']
+        env_param_channel.set_float_parameter("num_steps", k * j)
         env = UnityEnvironment(
             # base_port=5004,
             file_name=env_path,
-            side_channels=[engine_configuration_channel],
+            side_channels=[engine_configuration_channel, env_param_channel],
             no_graphics=False,
             timeout_wait=120
         )
@@ -169,7 +174,7 @@ class HighLvlEnv(py_environment.PyEnvironment):
 
     def _reset(self):
         self._episode_ended = False
-        self._env.reset()
+        #self._env.reset()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
         if len(decision_steps) > 0:
             return ts.restart(decision_steps[1].obs)
@@ -243,7 +248,7 @@ class LowLvlEnv(py_environment.PyEnvironment):
 
     def _reset(self):
         self._episode_ended = False
-        self._env.reset()
+        #self._env.reset()
         decision_steps, terminal_steps = self._env.get_steps(self._env_config['behavior_name'])
         if len(decision_steps) > 0:
             return ts.restart(decision_steps[1].obs)
