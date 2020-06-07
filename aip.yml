@@ -78,7 +78,7 @@ dependencies:
     - keras-preprocessing==1.1.2
     - markdown==3.2.2
     - mlagents==0.16.0
-    - mlagents-envs==0.16.0
+    - mlagents-envs==0.16.1
     - monotonic==1.5
     - msgpack==1.0.0
     - msgpack-python==0.5.6
