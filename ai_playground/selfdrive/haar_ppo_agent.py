@@ -1081,3 +1081,11 @@ class HaarPPOAgent(tf_agent.TFAgent):
                 step=self.train_step_counter)
 
         return self._adaptive_kl_beta
+
+
+class HaarAgent(tf_agent.TFAgent):
+    def _initialize(self):
+        pass
+
+    def _train(self, experience, weights):
+        pass

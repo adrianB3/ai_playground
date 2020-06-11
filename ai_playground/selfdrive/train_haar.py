@@ -5,6 +5,7 @@ import gin
 import tensorflow as tf
 import numpy as np
 from mlagents_envs.environment import UnityEnvironment
+from tf_agents.agents import PPOAgent
 from tf_agents.drivers import driver
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver, is_bandit_env
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
@@ -17,23 +18,34 @@ from tf_agents.trajectories import time_step as ts, trajectory
 from tf_agents.trajectories.trajectory import Trajectory
 from tf_agents.utils import nest_utils, common
 from tf_agents.utils.common import Checkpointer
+from tf_agents.eval.metric_utils import log_metrics, MetricsGroup
 
 from ai_playground.selfdrive.haar_ppo_agent import HaarPPOAgent
 from ai_playground.selfdrive.environments import UnityEnv, HighLvlEnv, LowLvlEnv
 from ai_playground.selfdrive.optimizers import get_optimizer
+from ai_playground.selfdrive.train_drivers import HaarLowLvlDriver
 from ai_playground.utils.exp_data import create_exp_local, init_neptune
 from ai_playground.utils.logger import get_logger
 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib import style
+
+style.use('fivethirtyeight')
 logger = get_logger()
 
 
 class SelfDriveAgent:
     def __init__(self, ctx: click.Context):
         self.ctx = ctx
-        self.exp_dir = create_exp_local(
-            experiments_dir=self.ctx.obj['config']['utils']['experiments_dir'],
-            exp_name=self.ctx.obj['exp_name']
-        )
+        if self.ctx.obj['config']['utils']['load_exp']:
+            self.exp_dir = self.ctx.obj['config']['utils']['load_exp']
+            logger.info("Loading experiment from: " + self.exp_dir)
+        else:
+            self.exp_dir = create_exp_local(
+                experiments_dir=self.ctx.obj['config']['utils']['experiments_dir'],
+                exp_name=self.ctx.obj['exp_name']
+            )
 
         if ctx.obj['log2neptune']:
             self.neptune_exp = init_neptune(ctx)
@@ -48,7 +60,7 @@ class SelfDriveAgent:
         self.optim_config = self.ctx.obj['config']['algorithm']['params'][
             self.ctx.obj['config']['algorithm']['params']['haar']['policy_optimizer']]
 
-        self.high_lvl_agent: HaarPPOAgent = HaarPPOAgent(
+        self.high_lvl_agent: PPOAgent = PPOAgent(
             time_step_spec=self.high_lvl_env.time_step_spec(),
             action_spec=self.high_lvl_env.action_spec(),
             optimizer=get_optimizer(self.optim_config['optimizer'],
@@ -64,10 +76,12 @@ class SelfDriveAgent:
             use_gae=self.optim_config['use_gae'],
             use_td_lambda_return=self.optim_config['use_td_lambda_return'],
             gradient_clipping=self.optim_config['gradient_clipping'],
+            debug_summaries=True,
+            summarize_grads_and_vars=True,
             train_step_counter=tf.Variable(0)
         )
 
-        self.low_lvl_agent: HaarPPOAgent = HaarPPOAgent(
+        self.low_lvl_agent: PPOAgent = PPOAgent(
             time_step_spec=self.low_lvl_env.time_step_spec(),
             action_spec=self.low_lvl_env.action_spec(),
             optimizer=get_optimizer(self.optim_config['optimizer'],
@@ -83,6 +97,8 @@ class SelfDriveAgent:
             use_gae=self.optim_config['use_gae'],
             use_td_lambda_return=self.optim_config['use_td_lambda_return'],
             gradient_clipping=self.optim_config['gradient_clipping'],
+            debug_summaries=True,
+            summarize_grads_and_vars=True,
             train_step_counter=tf.Variable(0)
         )
 
@@ -107,6 +123,35 @@ class SelfDriveAgent:
             max_length=1000
         )
 
+        train_dir = os.path.join(self.exp_dir, 'train')
+        eval_dir = os.path.join(self.exp_dir, 'eval')
+
+        self.train_summary_writer = tf.compat.v2.summary.create_file_writer(
+            train_dir, flush_millis=self.ctx.obj['config']['train_session']['summaries_flush_secs'] * 1000)
+        # self.train_summary_writer.set_as_default()
+        #
+        self.eval_summary_writer = tf.compat.v2.summary.create_file_writer(
+            eval_dir, flush_millis=self.ctx.obj['config']['train_session']['summaries_flush_secs'] * 1000)
+
+        self.h_eval_metrics = [
+            tf_metrics.ChosenActionHistogram()
+        ]
+
+        self.l_eval_metrics = [
+            tf_metrics.AverageReturnMetric(buffer_size=self.ctx.obj['config']['train_session']['num_eval_episodes']),
+            tf_metrics.AverageEpisodeLengthMetric(buffer_size=self.ctx.obj['config']['train_session']['num_eval_episodes'])
+        ]
+
+        self.h_step_observers = [
+            tf_metrics.EnvironmentSteps(),
+            tf_metrics.AverageReturnMetric(batch_size=1)
+        ]
+
+        self.l_step_observers = [
+            tf_metrics.EnvironmentSteps(),
+            tf_metrics.AverageReturnMetric(batch_size=1)
+        ]
+
         self.h_checkpoint_dir = os.path.join(self.exp_dir, 'h_checkpoints')
         self.h_checkpointer = Checkpointer(
             ckpt_dir=self.h_checkpoint_dir,
@@ -114,7 +159,8 @@ class SelfDriveAgent:
             agent=self.high_lvl_agent,
             policy=self.high_lvl_agent.policy,
             replay_buffer=self.high_lvl_replay_buffer,
-            global_step=self.high_lvl_agent.train_step_counter
+            global_step=self.high_lvl_agent.train_step_counter,
+            metrics=MetricsGroup(self.h_step_observers, 'high_lvl_train_metrics')
         )
         self.h_tf_policy_saver_dir = os.path.join(self.exp_dir, 'h_policy')
         self.h_tf_policy_saver = PolicySaver(self.high_lvl_agent.policy)
@@ -126,43 +172,31 @@ class SelfDriveAgent:
             agent=self.low_lvl_agent,
             policy=self.low_lvl_agent.policy,
             replay_buffer=self.modified_low_lvl_rep_buffer,
-            global_step=self.low_lvl_agent.train_step_counter
+            global_step=self.low_lvl_agent.train_step_counter,
+            metrics=MetricsGroup(self.l_step_observers, 'low_lvl_train_metrics')
         )
         self.l_tf_policy_saver_dir = os.path.join(self.exp_dir, 'l_policy')
         self.l_tf_policy_saver = PolicySaver(self.low_lvl_agent.policy)
 
-    def train(self):
-        # tf.keras.utils.plot_model(
-        #     self.high_lvl_agent.actor_net, to_file='model.png', show_shapes=True, show_layer_names=True,
-        #     rankdir='TB', expand_nested=True, dpi=300
-        # )
+        self.h_checkpointer.initialize_or_restore()
+        self.l_checkpointer.initialize_or_restore()
+
         self.k_0 = self.haar_config['k_0']
         self.k_s = self.haar_config['k_s']
         self.j = self.haar_config['j']
-        h_step_observers = [
-            tf_metrics.EnvironmentSteps(),
-            tf_metrics.AverageReturnMetric(),
-            tf_metrics.AverageEpisodeLengthMetric(),
-            self.high_lvl_replay_buffer.add_batch
-        ]
 
-        l_step_observers = [
-            tf_metrics.EnvironmentSteps(),
-            tf_metrics.AverageReturnMetric(),
-            tf_metrics.AverageEpisodeLengthMetric(),
-            self.low_lvl_replay_buffer.add_batch
-        ]
+    def train(self):
 
         high_lvl_driver = DynamicStepDriver(
             env=self.high_lvl_env,
             policy=self.high_lvl_agent.collect_policy,
-            observers=h_step_observers,
+            observers=[self.high_lvl_replay_buffer.add_batch] + self.h_step_observers,
             num_steps=1
         )
         low_lvl_driver = HaarLowLvlDriver(
             env=self.low_lvl_env,
             policy=self.low_lvl_agent.collect_policy,
-            observers=l_step_observers,
+            observers=[self.low_lvl_replay_buffer.add_batch] + self.l_step_observers,
             num_steps=1
         )
 
@@ -182,11 +216,19 @@ class SelfDriveAgent:
             if ep_count % self.j == 0:
                 exp = self.high_lvl_replay_buffer.gather_all()
                 self.high_lvl_agent.train(exp)
+
+                self.h_checkpointer.save(self.high_lvl_agent.train_step_counter)
+                self.h_tf_policy_saver.save(self.h_tf_policy_saver_dir)
+
+                self.l_checkpointer.save(self.low_lvl_agent.train_step_counter)
+                self.l_tf_policy_saver.save(self.l_tf_policy_saver_dir)
+
+                logger.info("Saved artifacts at: " + self.exp_dir)
+
+                self.high_lvl_env.reset()
+                self.unity_env.reset()
                 self.high_lvl_replay_buffer.clear()
                 print("High level trained.")
-                self.high_lvl_env.reset()
-                self.low_lvl_env.reset()
-                self.unity_env.reset()
 
             # modified_rewards = tf.math.scalar_mul(1 / self.k_0, advs)
             # sliced_mod_rewards = []
@@ -247,22 +289,20 @@ class SelfDriveAgent:
 
             low_lvl_exp = self.modified_low_lvl_rep_buffer.gather_all()
             loss = self.low_lvl_agent.train(low_lvl_exp)
-            print("Low level trained.")
 
-            print("Ep count: " + str(ep_count))
-            print("l_lvl env_steps: " + str(l_step_observers[0].result().numpy()))
+            if ep_count % 5 == 0:
+                avg_return = self.haar_compute_avg_reward(5)
+                print("Average return: " + str(avg_return))
 
-            self.h_checkpointer.save(self.high_lvl_agent.train_step_counter)
-            self.h_tf_policy_saver.save(self.h_tf_policy_saver_dir)
-
-            self.l_checkpointer.save(self.low_lvl_agent.train_step_counter)
-            self.l_tf_policy_saver.save(self.l_tf_policy_saver_dir)
-
-            logger.info("Saved artifacts at: " + self.exp_dir)
+            print("Low lvl Loss: " + str(loss.loss.numpy()))
+            # print(self.l_step_observers[1].result().numpy())
+            # print(self.h_step_observers[1].result().numpy())
 
             if self.ctx.obj['log2neptune']:
                 pass
+
             h_exp_prev = h_exp_current
+            self.low_lvl_env.reset()
             self.low_lvl_replay_buffer.clear()
             self.modified_low_lvl_rep_buffer.clear()
 
@@ -281,331 +321,36 @@ class SelfDriveAgent:
         adv = (1/self.k_0) * (cumulative_reward + self.haar_config['discount_factor_high_lvl'] * h_value_estimate_current.numpy() - h_value_estimate_prev.numpy())
         return adv
 
+    def haar_compute_avg_reward(self, num_eps):
+        total_return = 0.0
+        for _ in range(num_eps):
+            time_step_h = self.high_lvl_env.reset()
+            time_step_l = self.low_lvl_env.reset()
+            self.unity_env.reset()
+            ep_return = 0.0
 
-@gin.configurable
-class HaarLowLvlDriver(driver.Driver):
-    """A driver that takes N steps in an environment using a tf.while_loop.
+            h_action = self.high_lvl_agent.policy.action(time_step_h)
+            for i in range(self.k_0):
+                low_lvl_obs = {'image': time_step_l.observation['image'], 'vector': h_action.action}
+                time_step_l = time_step_l._replace(
+                    observation=low_lvl_obs
+                )
+                l_action = self.low_lvl_agent.policy.action(time_step_l)
+                time_step_l = self.low_lvl_env.step(l_action)
+                ep_return += time_step_l.reward
+            self.low_lvl_env.reset()
+            self.high_lvl_env.reset()
+            self.unity_env.reset()
+            total_return += ep_return
 
-      The while loop will run num_steps in the environment, only counting steps that
-      result in an environment transition, i.e. (time_step, action, next_time_step).
-      If a step results in environment resetting, i.e. time_step.is_last() and
-      next_time_step.is_first() (traj.is_boundary()), this is not counted toward the
-      num_steps.
-
-      As environments run batched time_steps, the counters for all batch elements
-      are summed, and execution stops when the total exceeds num_steps. When
-      batch_size > 1, there is no guarantee that exactly num_steps are taken -- it
-      may be more but never less.
-
-      This termination condition can be overridden in subclasses by implementing the
-      self._loop_condition_fn() method.
-      """
-
-    def __init__(
-            self,
-            env,
-            policy,
-            observers=None,
-            transition_observers=None,
-            num_steps=1,
-    ):
-        """Creates a DynamicStepDriver.
-
-        Args:
-          env: A tf_environment.Base environment.
-          policy: A tf_policy.Base policy.
-          observers: A list of observers that are updated after every step in the
-            environment. Each observer is a callable(time_step.Trajectory).
-          transition_observers: A list of observers that are updated after every
-            step in the environment. Each observer is a callable((TimeStep,
-            PolicyStep, NextTimeStep)).
-          num_steps: The number of steps to take in the environment.
-
-        Raises:
-          ValueError:
-            If env is not a tf_environment.Base or policy is not an instance of
-            tf_policy.Base.
-        """
-        super(HaarLowLvlDriver, self).__init__(env, policy, observers,
-                                               transition_observers)
-        self._num_steps = num_steps
-        self._run_fn = common.function_in_tf1()(self._run)
-
-    def _loop_condition_fn(self):
-        """Returns a function with the condition needed for tf.while_loop."""
-
-        def loop_cond(counter, *_):
-            """Determines when to stop the loop, based on step counter.
-
-            Args:
-              counter: Step counters per batch index. Shape [batch_size] when
-                batch_size > 1, else shape [].
-
-            Returns:
-              tf.bool tensor, shape (), indicating whether while loop should continue.
-            """
-            return tf.less(tf.reduce_sum(input_tensor=counter), self._num_steps)
-
-        return loop_cond
-
-    def _loop_body_fn(self):
-        """Returns a function with the driver's loop body ops."""
-
-        def loop_body(counter, time_step, policy_state, high_lvl_action):
-            """Runs a step in environment.
-
-            While loop will call multiple times.
-
-            Args:
-              counter: Step counters per batch index. Shape [batch_size].
-              time_step: TimeStep tuple with elements shape [batch_size, ...].
-              policy_state: Policy state tensor shape [batch_size, policy_state_dim].
-                Pass empty tuple for non-recurrent policies.
-
-            Returns:
-              loop_vars for next iteration of tf.while_loop.
-            """
-            low_lvl_obs = {'image': time_step.observation['image'], 'vector': high_lvl_action}
-            time_step = time_step._replace(
-                observation=low_lvl_obs
-            )
-            action_step = self.policy.action(time_step, policy_state)
-            policy_state = action_step.state
-            next_time_step = self.env.step(action_step.action)
-            next_low_lvl_obs = {'image': next_time_step.observation['image'], 'vector': high_lvl_action}
-            next_time_step = next_time_step._replace(
-                observation=next_low_lvl_obs
-            )
-
-            traj = trajectory.from_transition(time_step, action_step, next_time_step)
-            observer_ops = [observer(traj) for observer in self._observers]
-            transition_observer_ops = [
-                observer((time_step, action_step, next_time_step))
-                for observer in self._transition_observers
-            ]
-            with tf.control_dependencies(
-                    [tf.group(observer_ops + transition_observer_ops)]):
-                time_step, next_time_step, policy_state = tf.nest.map_structure(
-                    tf.identity, (time_step, next_time_step, policy_state))
-
-            # While loop counter should not be incremented for episode reset steps.
-            counter += tf.cast(~traj.is_boundary(), dtype=tf.int32)
-
-            return [counter, next_time_step, policy_state, high_lvl_action]
-
-        return loop_body
-
-    def run(self, time_step=None, policy_state=None, maximum_iterations=None, high_lvl_action=None):
-        """Takes steps in the environment using the policy while updating observers.
-
-        Args:
-          time_step: optional initial time_step. If None, it will use the
-            current_time_step of the environment. Elements should be shape
-            [batch_size, ...].
-          policy_state: optional initial state for the policy.
-          maximum_iterations: Optional maximum number of iterations of the while
-            loop to run. If provided, the cond output is AND-ed with an additional
-            condition ensuring the number of iterations executed is no greater than
-            maximum_iterations.
-
-        Returns:
-          time_step: TimeStep named tuple with final observation, reward, etc.
-          policy_state: Tensor with final step policy state.
-        """
-        return self._run_fn(
-            time_step=time_step,
-            policy_state=policy_state,
-            maximum_iterations=maximum_iterations, high_lvl_action=high_lvl_action)
-
-    # TODO(b/113529538): Add tests for policy_state.
-    def _run(self, time_step=None, policy_state=None, maximum_iterations=None, high_lvl_action=None):
-        """See `run()` docstring for details."""
-        if time_step is None:
-            time_step = self.env.current_time_step()
-        if policy_state is None:
-            policy_state = self.policy.get_initial_state(self.env.batch_size)
-
-        # Batch dim should be first index of tensors during data collection.
-        batch_dims = nest_utils.get_outer_shape(time_step,
-                                                self.env.time_step_spec())
-        counter = tf.zeros(batch_dims, tf.int32)
-
-        [_, time_step, policy_state, _] = tf.nest.map_structure(tf.stop_gradient,
-                                                                tf.while_loop(
-                                                                    cond=self._loop_condition_fn(),
-                                                                    body=self._loop_body_fn(),
-                                                                    loop_vars=[counter, time_step, policy_state,
-                                                                               high_lvl_action],
-                                                                    parallel_iterations=1,
-                                                                    maximum_iterations=maximum_iterations,
-                                                                    name='driver_loop'))
-        return time_step, policy_state
-
-
-@gin.configurable
-class HighLvlDriver(driver.Driver):
-    """A driver that takes N steps in an environment using a tf.while_loop.
-
-  The while loop will run num_steps in the environment, only counting steps that
-  result in an environment transition, i.e. (time_step, action, next_time_step).
-  If a step results in environment resetting, i.e. time_step.is_last() and
-  next_time_step.is_first() (traj.is_boundary()), this is not counted toward the
-  num_steps.
-
-  As environments run batched time_steps, the counters for all batch elements
-  are summed, and execution stops when the total exceeds num_steps. When
-  batch_size > 1, there is no guarantee that exactly num_steps are taken -- it
-  may be more but never less.
-
-  This termination condition can be overridden in subclasses by implementing the
-  self._loop_condition_fn() method.
-  """
-
-    def __init__(
-            self,
-            env,
-            policy,
-            observers=None,
-            transition_observers=None,
-            num_steps=1,
-    ):
-        """Creates a DynamicStepDriver.
-
-    Args:
-      env: A tf_environment.Base environment.
-      policy: A tf_policy.Base policy.
-      observers: A list of observers that are updated after every step in the
-        environment. Each observer is a callable(time_step.Trajectory).
-      transition_observers: A list of observers that are updated after every
-        step in the environment. Each observer is a callable((TimeStep,
-        PolicyStep, NextTimeStep)).
-      num_steps: The number of steps to take in the environment.
-
-    Raises:
-      ValueError:
-        If env is not a tf_environment.Base or policy is not an instance of
-        tf_policy.Base.
-    """
-        super(HighLvlDriver, self).__init__(env, policy, observers,
-                                            transition_observers)
-        self._num_steps = num_steps
-        self._run_fn = common.function_in_tf1()(self._run)
-        self._is_bandit_env = is_bandit_env(env)
-
-    def _loop_condition_fn(self):
-        """Returns a function with the condition needed for tf.while_loop."""
-
-        def loop_cond(counter, *_):
-            """Determines when to stop the loop, based on step counter.
-
-      Args:
-        counter: Step counters per batch index. Shape [batch_size] when
-          batch_size > 1, else shape [].
-
-      Returns:
-        tf.bool tensor, shape (), indicating whether while loop should continue.
-      """
-            return tf.less(tf.reduce_sum(input_tensor=counter), self._num_steps)
-
-        return loop_cond
-
-    def _loop_body_fn(self):
-        """Returns a function with the driver's loop body ops."""
-
-        def loop_body(counter, time_step, policy_state):
-            """Runs a step in environment.
-
-      While loop will call multiple times.
-
-      Args:
-        counter: Step counters per batch index. Shape [batch_size].
-        time_step: TimeStep tuple with elements shape [batch_size, ...].
-        policy_state: Policy state tensor shape [batch_size, policy_state_dim].
-          Pass empty tuple for non-recurrent policies.
-
-      Returns:
-        loop_vars for next iteration of tf.while_loop.
-      """
-            action_step = self.policy.action(time_step, policy_state)
-            policy_state = action_step.state
-            next_time_step = self.env.step(action_step.action)
-
-            if self._is_bandit_env:
-                # For Bandits we create episodes of length 1.
-                # Since the `next_time_step` is always of type LAST we need to replace
-                # the step type of the current `time_step` to FIRST.
-                batch_size = tf.shape(input=time_step.discount)
-                time_step = time_step._replace(
-                    step_type=tf.fill(batch_size, ts.StepType.FIRST))
-
-            traj = trajectory.from_transition(time_step, action_step, next_time_step)
-            observer_ops = [observer(traj) for observer in self._observers]
-            transition_observer_ops = [
-                observer((time_step, action_step, next_time_step))
-                for observer in self._transition_observers
-            ]
-            with tf.control_dependencies(
-                    [tf.group(observer_ops + transition_observer_ops)]):
-                time_step, next_time_step, policy_state = tf.nest.map_structure(
-                    tf.identity, (time_step, next_time_step, policy_state))
-
-            # While loop counter should not be incremented for episode reset steps.
-            counter += tf.cast(~traj.is_boundary(), dtype=tf.int32)
-
-            return [counter, next_time_step, policy_state]
-
-        return loop_body
-
-    def run(self, time_step=None, policy_state=None, maximum_iterations=None):
-        """Takes steps in the environment using the policy while updating observers.
-
-    Args:
-      time_step: optional initial time_step. If None, it will use the
-        current_time_step of the environment. Elements should be shape
-        [batch_size, ...].
-      policy_state: optional initial state for the policy.
-      maximum_iterations: Optional maximum number of iterations of the while
-        loop to run. If provided, the cond output is AND-ed with an additional
-        condition ensuring the number of iterations executed is no greater than
-        maximum_iterations.
-
-    Returns:
-      time_step: TimeStep named tuple with final observation, reward, etc.
-      policy_state: Tensor with final step policy state.
-    """
-        return self._run_fn(
-            time_step=time_step,
-            policy_state=policy_state,
-            maximum_iterations=maximum_iterations)
-
-    # TODO(b/113529538): Add tests for policy_state.
-    def _run(self, time_step=None, policy_state=None, maximum_iterations=None):
-        """See `run()` docstring for details."""
-        if time_step is None:
-            time_step = self.env.current_time_step()
-        if policy_state is None:
-            policy_state = self.policy.get_initial_state(self.env.batch_size)
-
-        # Batch dim should be first index of tensors during data collection.
-        batch_dims = nest_utils.get_outer_shape(time_step,
-                                                self.env.time_step_spec())
-        counter = tf.zeros(batch_dims, tf.int32)
-
-        [_, time_step, policy_state] = tf.while_loop(
-            cond=self._loop_condition_fn(),
-            body=self._loop_body_fn(),
-            loop_vars=[counter, time_step, policy_state],
-            back_prop=False,
-            parallel_iterations=1,
-            maximum_iterations=maximum_iterations,
-            name='driver_loop')
-        return time_step, policy_state
+        avg_return = total_return / num_eps
+        return avg_return.numpy()[0]
 
 
 def create_network(name: str, input_spec, output_spec):
     preprocessing_layers = {
-        'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3)),
-                                             # tf.keras.layers.Conv2D(16, (3, 3)),
+        'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(4, (3, 3)),
+                                             tf.keras.layers.Conv2D(8, (3, 3)),
                                              tf.keras.layers.Flatten()]),
         'vector': tf.keras.layers.Dense(4)
     }

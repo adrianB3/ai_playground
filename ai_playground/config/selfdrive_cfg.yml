@@ -1,6 +1,7 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
+  load_exp:  # none is you don't want to load any exp
 environment:
   env_path: ../../../ai_playground_build/ai_playground.exe
   time_scale: 4.0 # env time acceleration as multiplication factor over real-time
@@ -18,7 +19,7 @@ algorithm:
           epsilon: 0.00001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
-      num_epochs: 1
+      num_epochs: 5
       discount_factor: 0.995
       gradient_clipping: 0.5
       entropy_regularization: 0.01
@@ -31,7 +32,7 @@ algorithm:
       k_s: 10 # min number of steps after which a high level action is required
       k_0: 200 # number of low level steps
       num_skills: 2
-      j: 10 # number of ep for high level training
+      j: 3 # number of ep for high level training
       discount_factor_high_lvl: 0.995
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
@@ -39,4 +40,8 @@ train_session:
   num_env_steps: 300000
   num_parallel_envs: 4
   collect_eps_per_iter: 3
-  replay_buff_capacity: 1000
+  replay_buff_capacity: 300
+  num_eval_episodes: 5
+  eval_interval: 2000, # nb of steps between eval sessions
+  use_tf_functions: True
+  summaries_flush_secs: 1
