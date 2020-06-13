@@ -6,6 +6,7 @@ from datetime import datetime
 
 from ai_playground.selfdrive.train import Trainer
 from ai_playground.selfdrive.train_haar import SelfDriveAgent
+from ai_playground.selfdrive.train_ppo import PPOTrainer
 from ai_playground.utils.logger import get_logger
 from ai_playground.utils.config_parser import load_cfg
 
@@ -38,7 +39,7 @@ def train(ctx):
     pp.pprint(dict(ctx.obj['config']))
 
     logger.info("Starting training")
-    sda = SelfDriveAgent(ctx)
+    sda = PPOTrainer(ctx)
     sda.train()
 
 

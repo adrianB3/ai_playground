@@ -1,21 +1,21 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
-  load_exp:  # none is you don't want to load any exp
+  load_exp:  #D:\repos\ai_playground_experiments\exp_1\exp_1_13-06-2020_16_03_29\ # none is you don't want to load any exp
 environment:
-  env_path: ../../../ai_playground_build/ai_playground.exe
-  time_scale: 4.0 # env time acceleration as multiplication factor over real-time
+  env_path: #../../../ai_playground_build/ai_playground.exe
+  time_scale: 1.0 # env time acceleration as multiplication factor over real-time
   behavior_name_high_lvl: abstract_brain?team=0
   behavior_name_low_lvl: primitive_brain?team=0
   behavior_name: CarBrain?team=0
 algorithm:
-  name: haar
+  name: ppo
   params:
     ppo:
       optimizer: adam
       optimizer_params:
         adam:
-          learning_rate: 0.00004
+          learning_rate: 0.00005
           epsilon: 0.00001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
@@ -26,6 +26,8 @@ algorithm:
       importance_ratio_clipping: 0.2
       use_gae: True
       use_td_lambda_return: True
+      normalize_observations: False
+      normalize_rewards: False
 
     haar:
       num_eps: 1000 # N - number of episodes
@@ -36,12 +38,20 @@ algorithm:
       discount_factor_high_lvl: 0.995
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
+  networks_params:
+    actor_fc_layers: (128, 75)
+    value_fc_layers: (75, 40)
 train_session:
   num_env_steps: 300000
+  run_parallel: False
   num_parallel_envs: 4
-  collect_eps_per_iter: 3
-  replay_buff_capacity: 300
-  num_eval_episodes: 5
-  eval_interval: 2000, # nb of steps between eval sessions
-  use_tf_functions: True
+  collect_eps_per_iter: 1
+  replay_buff_capacity: 150
+  num_eval_episodes: 2
+  eval_interval: 500 # nb of steps between eval sessions
+  summary_interval: 10
+  use_tf_function: True
   summaries_flush_secs: 1
+  log_interval: 10
+  train_checkpoint_interval: 100
+  policy_checkpoint_interval: 100
