@@ -83,16 +83,19 @@ class PPOTrainer:
             ckpt_dir=self.train_dir,
             max_to_keep=1,
             agent=self.agent,
+            policy=self.agent.policy,
+            replay_buffer=self.replay_buffer,
             global_step=self.global_step,
             metrics=metric_utils.MetricsGroup(self.train_metrics, 'train_metrics'))
         self.policy_checkpointer = common.Checkpointer(
-            ckpt_dir=os.path.join(self.train_dir, 'policy'),
+            ckpt_dir=os.path.join(self.eval_dir, 'policy'),
             policy=self.eval_policy,
             global_step=self.global_step)
         self.saved_model = policy_saver.PolicySaver(
             self.eval_policy, train_step=self.global_step)
 
         self.train_checkpointer.initialize_or_restore()
+        self.global_step = tf.compat.v1.train.get_or_create_global_step()
 
         self.collect_driver = dynamic_episode_driver.DynamicEpisodeDriver(
             self.env,
@@ -167,7 +170,7 @@ class PPOTrainer:
             'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3)),
                                                  tf.keras.layers.Conv2D(16, (3, 3)),
                                                  tf.keras.layers.Flatten()]),
-            'vector1': tf.keras.layers.Dense(50)
+            'vector1': tf.keras.layers.Dense(16)
         }
         preprocessing_combiner = tf.keras.models.Sequential(
             [tf.keras.layers.Concatenate(axis=-1)])
@@ -179,7 +182,7 @@ class PPOTrainer:
                 preprocessing_layers=preprocessing_layers,
                 preprocessing_combiner=preprocessing_combiner,
                 fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
-                activation_fn=tf.nn.elu
+                activation_fn=tf.nn.relu
             )
 
         if name == "value_preproc":
@@ -188,7 +191,7 @@ class PPOTrainer:
                 preprocessing_layers=preprocessing_layers,
                 preprocessing_combiner=preprocessing_combiner,
                 fc_layer_params=literal_eval(networks_params['value_fc_layers']),
-                activation_fn=tf.nn.elu
+                activation_fn=tf.nn.relu
             )
 
     def get_optimizer(self, name: str):
