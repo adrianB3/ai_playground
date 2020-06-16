@@ -1,9 +1,9 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
-  experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
-  load_exp:  D:\repos\ai_playground_experiments\exp_2\exp_2_15-06-2020_20_28_08\  # none is you don't want to load any exp
+  experiments_dir: C:\Users\UIB36644\ai_playground_experiments # where the experiments data should be stored
+  load_exp:  #D:\repos\ai_playground_experiments\exp3\exp3_15-06-2020_22_12_14\  # none is you don't want to load any exp
 environment:
-  env_path: ../../../ai_playground_build/ai_playground.exe
+  env_path: #C:\Users\UIB36644\ai_playground_build\ai_playground.exe
   time_scale: 1.0 # env time acceleration as multiplication factor over real-time
   behavior_name_high_lvl: abstract_brain?team=0
   behavior_name_low_lvl: primitive_brain?team=0
@@ -27,7 +27,7 @@ algorithm:
       ppo_value_net: value_preproc
       num_epochs: 5
       discount_factor: 0.999
-      gradient_clipping: 0.5
+      gradient_clipping: 0.7
       entropy_regularization: 0.01
       importance_ratio_clipping: 0.7
       use_gae: True
@@ -52,7 +52,7 @@ train_session:
   run_parallel: False
   num_parallel_envs: 4
   collect_eps_per_iter: 1
-  replay_buff_capacity: 150
+  replay_buff_capacity: 100
   num_eval_episodes: 2
   eval_interval: 200 # nb of steps between eval sessions
   summary_interval: 10
