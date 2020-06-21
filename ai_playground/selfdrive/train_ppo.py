@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from tf_agents.agents.ppo import ppo_clip_agent, ppo_agent
 from tf_agents.drivers import dynamic_episode_driver
-from tf_agents.environments import parallel_py_environment
+from tf_agents.environments import parallel_py_environment, wrappers
 from tf_agents.environments import tf_py_environment
 from tf_agents.environments.wrappers import RunStats
 from tf_agents.eval import metric_utils
@@ -50,7 +50,9 @@ class PPOTrainer:
             #     [lambda: env_load_fn(env_name)] * self.train_sess_config['']))
             pass
         else:
-            self.env = tf_py_environment.TFPyEnvironment(SelfDriveEnvironment(ctx))
+            pyenv = SelfDriveEnvironment(ctx)
+            pyenv_limit = wrappers.TimeLimit(pyenv, duration=2000)
+            self.env = tf_py_environment.TFPyEnvironment(pyenv_limit)
         # self.eval_env = tf_py_environment.TFPyEnvironment(SelfDriveEnvironment(ctx))
         self.agent = self.create_ppo_agent()
         self.environment_steps_metric = tf_metrics.EnvironmentSteps()
@@ -108,9 +110,15 @@ class PPOTrainer:
             self.agent.train = common.function(self.agent.train, autograph=False)
             self.train_step = common.function(self.train_step)
 
+        physical_devices = tf.config.list_physical_devices('GPU')
+        try:
+            tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        except:
+            # Invalid device or cannot modify virtual devices once initialized.
+            pass
+
     def train_step(self):
         trajectories = self.replay_buffer.gather_all()
-        # print("traj dim: " + str(len(trajectories.reward.shape)))
         return self.agent.train(experience=trajectories)
 
     def prep_experiment(self):
@@ -167,10 +175,11 @@ class PPOTrainer:
         networks_params = self.ctx.obj['config']['algorithm']['networks_params']
 
         preprocessing_layers = {
-            'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3)),
-                                                 tf.keras.layers.Conv2D(16, (3, 3)),
+            'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3), activation='relu'),
+                                                 tf.keras.layers.MaxPooling2D((2, 2)),
+                                                 tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
                                                  tf.keras.layers.Flatten()]),
-            'vector1': tf.keras.layers.Dense(16)
+            'vector1': tf.keras.layers.Dense(12, activation='relu')
         }
         preprocessing_combiner = tf.keras.models.Sequential(
             [tf.keras.layers.Concatenate(axis=-1)])
@@ -182,7 +191,7 @@ class PPOTrainer:
                 preprocessing_layers=preprocessing_layers,
                 preprocessing_combiner=preprocessing_combiner,
                 fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
-                activation_fn=tf.nn.relu
+                activation_fn=tf.nn.elu
             )
 
         if name == "value_preproc":
@@ -191,7 +200,7 @@ class PPOTrainer:
                 preprocessing_layers=preprocessing_layers,
                 preprocessing_combiner=preprocessing_combiner,
                 fc_layer_params=literal_eval(networks_params['value_fc_layers']),
-                activation_fn=tf.nn.relu
+                activation_fn=tf.nn.elu
             )
 
     def get_optimizer(self, name: str):
@@ -222,19 +231,17 @@ class PPOTrainer:
                         summary_prefix='Metrics'
                     )
                     print("Evaluated.")
+                for train_metric in self.train_metrics:
+                    train_metric.tf_summaries(
+                        train_step=self.global_step, step_metrics=self.step_metrics)
 
                 start_time = time.time()
                 self.collect_driver.run()
                 collect_time += time.time() - start_time
-
                 start_time = time.time()
                 total_loss, _ = self.train_step()
                 self.replay_buffer.clear()
                 train_time += time.time() - start_time
-
-                for train_metric in self.train_metrics:
-                    train_metric.tf_summaries(
-                        train_step=self.global_step, step_metrics=self.step_metrics)
 
                 if global_step_val % self.train_sess_config['log_interval'] == 0:
                     logger.info('step = %d, loss = %f', global_step_val, total_loss)

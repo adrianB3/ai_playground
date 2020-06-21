@@ -1,15 +1,13 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
-  experiments_dir: C:\Users\UIB36644\ai_playground_experiments # where the experiments data should be stored
-  load_exp:  #D:\repos\ai_playground_experiments\exp3\exp3_15-06-2020_22_12_14\  # none is you don't want to load any exp
+  experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
+  load_exp: #D:\repos\ai_playground_experiments\rand_start\rand_start_19-06-2020_17_16_23_evolved\  # none is you don't want to load any exp
 environment:
-  env_path: #C:\Users\UIB36644\ai_playground_build\ai_playground.exe
-  time_scale: 1.0 # env time acceleration as multiplication factor over real-time
-  behavior_name_high_lvl: abstract_brain?team=0
-  behavior_name_low_lvl: primitive_brain?team=0
+  env_path: #D:\repos\ai_playground_build\ai_playground.exe
+  time_scale: 2.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
 icm_params:
-  learning_rate: 0.0001
+  learning_rate: 0.00004
   epsilon: 0.000001
   batch_size: 32
   num_epochs: 10
@@ -22,18 +20,18 @@ algorithm:
       optimizer_params:
         adam:
           learning_rate: 0.00001
-          epsilon: 0.000001
+          epsilon: 0.0000001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
-      num_epochs: 5
-      discount_factor: 0.999
-      gradient_clipping: 0.7
-      entropy_regularization: 0.01
-      importance_ratio_clipping: 0.7
+      num_epochs: 8
+      discount_factor: 0.995
+      gradient_clipping: 0.1
+      entropy_regularization: 0.0
+      importance_ratio_clipping: 0.2
       use_gae: True
-      use_td_lambda_return: True
-      normalize_observations: True
-      normalize_rewards: True
+      use_td_lambda_return: False
+      normalize_observations: False
+      normalize_rewards: False
 
     haar:
       num_eps: 1000 # N - number of episodes
@@ -45,16 +43,17 @@ algorithm:
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
   networks_params:
-    actor_fc_layers: (128, 75)
-    value_fc_layers: (75, 40)
+    actor_fc_layers: (200, 100)
+    value_fc_layers: (200, 100)
 train_session:
+  only_visual_obs: True
   num_env_steps: 300000
   run_parallel: False
   num_parallel_envs: 4
-  collect_eps_per_iter: 1
-  replay_buff_capacity: 100
-  num_eval_episodes: 2
-  eval_interval: 200 # nb of steps between eval sessions
+  collect_eps_per_iter: 2
+  replay_buff_capacity: 300
+  num_eval_episodes: 1
+  eval_interval: 100 # nb of steps between eval sessions
   summary_interval: 10
   use_tf_function: True
   summaries_flush_secs: 1
