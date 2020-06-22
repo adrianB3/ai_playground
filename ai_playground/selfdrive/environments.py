@@ -74,7 +74,10 @@ class SelfDriveEnvironment(py_environment.PyEnvironment):
         for i in range(1, len(observation_spec)):
             obs_spec_vec = ArraySpec(observation_spec[i], dtype=np.float32, name='vector_observations' + str(i))
             obs_spec_dict.update({'vector' + str(i): obs_spec_vec})
-        return obs_spec_dict
+        if self._env_config['only_visual_obs']:
+            return obs_spec_vis
+        else:
+            return obs_spec_dict
 
     def action_spec(self):
         unity_behaviour_spec = self._env.get_behavior_spec(self._env_config['behavior_name'])

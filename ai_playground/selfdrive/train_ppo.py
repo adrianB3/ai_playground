@@ -174,34 +174,51 @@ class PPOTrainer:
     def get_networks(self, name: str):
         networks_params = self.ctx.obj['config']['algorithm']['networks_params']
 
-        preprocessing_layers = {
-            'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3), activation='relu'),
-                                                 tf.keras.layers.MaxPooling2D((2, 2)),
-                                                 tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
-                                                 tf.keras.layers.Flatten()]),
-            'vector1': tf.keras.layers.Dense(12, activation='relu')
-        }
-        preprocessing_combiner = tf.keras.models.Sequential(
-            [tf.keras.layers.Concatenate(axis=-1)])
+        if not self.ctx.obj['config']['environment']['only_visual_obs']:
+            preprocessing_layers = {
+                'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3), activation='relu'),
+                                                     tf.keras.layers.MaxPooling2D((2, 2)),
+                                                     tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
+                                                     tf.keras.layers.Flatten()]),
+                'vector1': tf.keras.layers.Dense(12, activation='relu')
+            }
+            preprocessing_combiner = tf.keras.models.Sequential(
+                [tf.keras.layers.Concatenate(axis=-1)])
 
-        if name == "actor_preproc":
-            return ActorDistributionNetwork(
-                input_tensor_spec=self.env.observation_spec(),
-                output_tensor_spec=self.env.action_spec(),
-                preprocessing_layers=preprocessing_layers,
-                preprocessing_combiner=preprocessing_combiner,
-                fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
-                activation_fn=tf.nn.elu
-            )
+            if name == "actor_preproc":
+                return ActorDistributionNetwork(
+                    input_tensor_spec=self.env.observation_spec(),
+                    output_tensor_spec=self.env.action_spec(),
+                    preprocessing_layers=preprocessing_layers,
+                    preprocessing_combiner=preprocessing_combiner,
+                    fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
+                    activation_fn=tf.nn.elu
+                )
 
-        if name == "value_preproc":
-            return ValueNetwork(
-                input_tensor_spec=self.env.observation_spec(),
-                preprocessing_layers=preprocessing_layers,
-                preprocessing_combiner=preprocessing_combiner,
-                fc_layer_params=literal_eval(networks_params['value_fc_layers']),
-                activation_fn=tf.nn.elu
-            )
+            if name == "value_preproc":
+                return ValueNetwork(
+                    input_tensor_spec=self.env.observation_spec(),
+                    preprocessing_layers=preprocessing_layers,
+                    preprocessing_combiner=preprocessing_combiner,
+                    fc_layer_params=literal_eval(networks_params['value_fc_layers']),
+                    activation_fn=tf.nn.elu)
+        else:
+            if name == "actor_preproc":
+                return ActorDistributionNetwork(
+                    input_tensor_spec=self.env.observation_spec(),
+                    output_tensor_spec=self.env.action_spec(),
+                    conv_layer_params=[(16, 8, 2), (32, 4, 2), (32, 4, 2)],
+                    fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
+                    activation_fn=tf.nn.elu
+                )
+
+            if name == "value_preproc":
+                return ValueNetwork(
+                    input_tensor_spec=self.env.observation_spec(),
+                    conv_layer_params=[(16, 8, 2), (16, 4, 2), (32, 4, 2)],
+                    fc_layer_params=literal_eval(networks_params['value_fc_layers']),
+                    activation_fn=tf.nn.elu
+                )
 
     def get_optimizer(self, name: str):
         optim_config = self.ctx.obj['config']['algorithm']['params']['ppo']['optimizer_params'][name]

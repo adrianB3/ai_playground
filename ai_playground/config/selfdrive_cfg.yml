@@ -3,9 +3,10 @@ utils:
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
   load_exp: #D:\repos\ai_playground_experiments\rand_start\rand_start_19-06-2020_17_16_23_evolved\  # none is you don't want to load any exp
 environment:
-  env_path: #D:\repos\ai_playground_build\ai_playground.exe
+  env_path: D:\repos\ai_playground_build\highway_scenario\ai_playground.exe
   time_scale: 2.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
+  only_visual_obs: True
 icm_params:
   learning_rate: 0.00004
   epsilon: 0.000001
@@ -46,12 +47,11 @@ algorithm:
     actor_fc_layers: (200, 100)
     value_fc_layers: (200, 100)
 train_session:
-  only_visual_obs: True
   num_env_steps: 300000
   run_parallel: False
   num_parallel_envs: 4
   collect_eps_per_iter: 2
-  replay_buff_capacity: 300
+  replay_buff_capacity: 200
   num_eval_episodes: 1
   eval_interval: 100 # nb of steps between eval sessions
   summary_interval: 10
