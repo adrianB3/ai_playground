@@ -42,6 +42,17 @@ def train(ctx):
     sda = PPOTrainer(ctx)
     sda.train()
 
+@main.command()
+@click.pass_context
+def inference(ctx):
+    logger.info("Loaded config: " + ctx.obj['config_file'])
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(dict(ctx.obj['config']))
+
+    logger.info("Starting training")
+    sda = PPOTrainer(ctx)
+    sda.inference()
+
 
 def start():
     main(obj={})

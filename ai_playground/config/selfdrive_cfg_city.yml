@@ -1,9 +1,9 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
-  load_exp: D:\repos\ai_playground_experiments\highway_with_obstacles1_ev_from_hsimple1\highway_simple1_23-06-2020_11_49_03\  # none is you don't want to load any exp
+  load_exp: #D:\repos\ai_playground_experiments\highway_with_obstacles1_ev_from_hsimple1\highway_simple1_23-06-2020_11_49_03\  # none is you don't want to load any exp
 environment:
-  env_path: D:\repos\ai_playground_build\highway_scenario\ai_playground.exe
+  env_path: #D:\repos\ai_playground_build\highway_scenario\ai_playground.exe
   time_scale: 2.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
   only_visual_obs: True

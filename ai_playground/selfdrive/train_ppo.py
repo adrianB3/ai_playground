@@ -51,8 +51,9 @@ class PPOTrainer:
             pass
         else:
             pyenv = SelfDriveEnvironment(ctx)
-            pyenv_limit = wrappers.TimeLimit(pyenv, duration=2000)
-            self.env = tf_py_environment.TFPyEnvironment(pyenv_limit)
+            pyenv_limit = wrappers.TimeLimit(pyenv, duration=3000)
+            pyenv_stats = wrappers.RunStats(pyenv_limit)
+            self.env = tf_py_environment.TFPyEnvironment(pyenv_stats)
         # self.eval_env = tf_py_environment.TFPyEnvironment(SelfDriveEnvironment(ctx))
         self.agent = self.create_ppo_agent()
         self.environment_steps_metric = tf_metrics.EnvironmentSteps()
@@ -63,9 +64,9 @@ class PPOTrainer:
 
         self.train_metrics = self.step_metrics + [
             tf_metrics.AverageReturnMetric(
-                batch_size=1),  # todo adapt to parallel stuff
+                batch_size=1, buffer_size=self.train_sess_config['collect_eps_per_iter']),  # todo adapt to parallel stuff
             tf_metrics.AverageEpisodeLengthMetric(
-                batch_size=1),
+                batch_size=1, buffer_size=self.train_sess_config['collect_eps_per_iter'])
         ]
 
         self.eval_metrics = [
@@ -303,3 +304,14 @@ class PPOTrainer:
             )
             if self.ctx.obj['log2neptune']:
                 self.neptune_exp.close()
+
+    def inference(self):
+        metric_utils.eager_compute(
+            self.eval_metrics,
+            self.env,
+            self.eval_policy,
+            num_episodes=1,
+            train_step=self.global_step,
+            summary_writer=self.eval_summary_writer,
+            summary_prefix='Metrics'
+        )
