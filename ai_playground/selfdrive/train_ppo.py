@@ -177,11 +177,11 @@ class PPOTrainer:
 
         if not self.ctx.obj['config']['environment']['only_visual_obs']:
             preprocessing_layers = {
-                'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3), activation='relu'),
-                                                     tf.keras.layers.MaxPooling2D((2, 2)),
-                                                     tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
+                'image': tf.keras.models.Sequential([tf.keras.layers.Conv2D(8, (3, 3), strides=2, activation='relu'),
+                                                     # tf.keras.layers.MaxPooling2D((2, 2)),
+                                                     tf.keras.layers.Conv2D(16, (3, 3), strides=2, activation='relu'),
                                                      tf.keras.layers.Flatten()]),
-                'vector1': tf.keras.layers.Dense(12, activation='relu')
+                'vector1': tf.keras.layers.Dense(6, activation='relu')
             }
             preprocessing_combiner = tf.keras.models.Sequential(
                 [tf.keras.layers.Concatenate(axis=-1)])
