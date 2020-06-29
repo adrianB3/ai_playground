@@ -1,12 +1,13 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
-  experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
-  load_exp: #D:\repos\ai_playground_experiments\highway_with_obstacles1_ev_from_hsimple1\highway_simple1_23-06-2020_11_49_03\  # none is you don't want to load any exp
+  experiments_dir: D:\repos\experiments2 # where the experiments data should be stored
+  load_exp: D:\repos\experiments2\city_drive\city_drive_28-06-2020_21_52_22\  # none is you don't want to load any exp
 environment:
-  env_path: #D:\repos\ai_playground_build\highway_scenario\ai_playground.exe
-  time_scale: 2.0 # env time acceleration as multiplication factor over real-time
+  env_path: D:\repos\ai_playground_build\city_scenario\ai_playground.exe
+  time_scale: 1.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
-  only_visual_obs: True
+  only_visual_obs: False
+  use_rays: False
 icm_params:
   learning_rate: 0.00004
   epsilon: 0.000001
@@ -20,19 +21,19 @@ algorithm:
       optimizer: adam
       optimizer_params:
         adam:
-          learning_rate: 0.00001
+          learning_rate: 0.000001
           epsilon: 0.0000001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
       num_epochs: 8
       discount_factor: 0.995
-      gradient_clipping: 0.1
+      gradient_clipping: 0.2
       entropy_regularization: 0.0
       importance_ratio_clipping: 0.2
       use_gae: True
-      use_td_lambda_return: False
-      normalize_observations: False
-      normalize_rewards: False
+      use_td_lambda_return: True
+      normalize_observations: True
+      normalize_rewards: True
 
     haar:
       num_eps: 1000 # N - number of episodes
@@ -44,15 +45,15 @@ algorithm:
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
   networks_params:
-    actor_fc_layers: (200, 100)
-    value_fc_layers: (200, 100)
+    actor_fc_layers: (200, 150)
+    value_fc_layers: (150, 100)
 train_session:
   num_env_steps: 300000
   run_parallel: False
   num_parallel_envs: 4
-  collect_eps_per_iter: 4
+  collect_eps_per_iter: 2
   replay_buff_capacity: 200
-  num_eval_episodes: 4
+  num_eval_episodes: 1
   eval_interval: 100 # nb of steps between eval sessions
   summary_interval: 10
   use_tf_function: True

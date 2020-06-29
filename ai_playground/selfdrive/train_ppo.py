@@ -29,6 +29,7 @@ from ai_playground.utils.logger import get_logger
 
 logger = get_logger()
 
+tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True)
 
 class PPOTrainer:
     def __init__(self, ctx: click.Context):
@@ -111,12 +112,12 @@ class PPOTrainer:
             self.agent.train = common.function(self.agent.train, autograph=False)
             self.train_step = common.function(self.train_step)
 
-        physical_devices = tf.config.list_physical_devices('GPU')
-        try:
-            tf.config.experimental.set_memory_growth(physical_devices[0], True)
-        except:
-            # Invalid device or cannot modify virtual devices once initialized.
-            pass
+        # physical_devices = tf.config.list_physical_devices('GPU')
+        # try:
+        #     tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        # except:
+        #     # Invalid device or cannot modify virtual devices once initialized.
+        #     pass
 
     def train_step(self):
         trajectories = self.replay_buffer.gather_all()
@@ -183,6 +184,8 @@ class PPOTrainer:
                                                      tf.keras.layers.Flatten()]),
                 'vector1': tf.keras.layers.Dense(6, activation='relu')
             }
+            if self.ctx.obj['config']['environment']['use_rays']:
+                preprocessing_layers.update({'vector2': tf.keras.layers.Dense(16, activation='relu')})
             preprocessing_combiner = tf.keras.models.Sequential(
                 [tf.keras.layers.Concatenate(axis=-1)])
 
@@ -208,7 +211,7 @@ class PPOTrainer:
                 return ActorDistributionNetwork(
                     input_tensor_spec=self.env.observation_spec(),
                     output_tensor_spec=self.env.action_spec(),
-                    conv_layer_params=[(16, 8, 2), (32, 4, 2), (32, 4, 2)],
+                    conv_layer_params=[(16, 3, 2), (32, 3, 2), (32, 3, 2)],
                     fc_layer_params=literal_eval(networks_params['actor_fc_layers']),
                     activation_fn=tf.nn.elu
                 )
@@ -216,7 +219,7 @@ class PPOTrainer:
             if name == "value_preproc":
                 return ValueNetwork(
                     input_tensor_spec=self.env.observation_spec(),
-                    conv_layer_params=[(16, 8, 2), (16, 4, 2), (32, 4, 2)],
+                    conv_layer_params=[(16, 3, 2), (32, 3, 2), (32, 3, 2)],
                     fc_layer_params=literal_eval(networks_params['value_fc_layers']),
                     activation_fn=tf.nn.elu
                 )
@@ -274,12 +277,14 @@ class PPOTrainer:
 
                     if global_step_val % self.train_sess_config['train_checkpoint_interval'] == 0:
                         self.train_checkpointer.save(global_step=global_step_val)
+                        print("Saved checkpoint.")
 
                     if global_step_val % self.train_sess_config['policy_checkpoint_interval'] == 0:
                         self.policy_checkpointer.save(global_step=global_step_val)
                         saved_model_path = os.path.join(
                             self.saved_model_dir, 'policy_' + ('%d' % global_step_val).zfill(9))
                         self.saved_model.save(saved_model_path)
+                        print("Saved policy.")
 
                     if self.ctx.obj['log2neptune']:
                         self.neptune_exp.log_metric('step', global_step_val)
@@ -306,12 +311,18 @@ class PPOTrainer:
                 self.neptune_exp.close()
 
     def inference(self):
+        avg_time = 0
+        num_eps = 10
+        eval_start_time = time.time()
         metric_utils.eager_compute(
             self.eval_metrics,
             self.env,
             self.eval_policy,
-            num_episodes=1,
+            num_episodes=num_eps,
             train_step=self.global_step,
             summary_writer=self.eval_summary_writer,
             summary_prefix='Metrics'
         )
+        eval_stop_time = time.time()
+        avg_time = (eval_stop_time - eval_start_time) / num_eps
+        logger.info("Avg_eval_time" + str(avg_time))

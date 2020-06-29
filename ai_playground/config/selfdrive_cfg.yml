@@ -1,9 +1,9 @@
 utils:
   neptune_project: adrianb3/ai-playground # neptune.ai project name
   experiments_dir: D:\repos\ai_playground_experiments # where the experiments data should be stored
-  load_exp: #D:\repos\ai_playground_experiments\dec_req_15\dec_req_15_26-06-2020_00_04_11\  # none is you don't want to load any exp
+  load_exp: #D:\repos\ai_playground_experiments\highway_drive\highway_drive_28-06-2020_15_14_03\  # none is you don't want to load any exp
 environment:
-  env_path: #D:\repos\ai_playground_build\highway_scenario_lvl1\ai_playground.exe
+  env_path: D:\repos\ai_playground_build\highway_scenario\ai_playground.exe
   time_scale: 2.0 # env time acceleration as multiplication factor over real-time
   behavior_name: CarBrain?team=0
   only_visual_obs: True
@@ -20,7 +20,7 @@ algorithm:
       optimizer: adam
       optimizer_params:
         adam:
-          learning_rate: 0.00001
+          learning_rate: 0.000001
           epsilon: 0.0000001
       ppo_actor_net: actor_preproc
       ppo_value_net: value_preproc
@@ -44,19 +44,19 @@ algorithm:
       discount_factor_low_lvl: 0.995
       policy_optimizer: ppo
   networks_params:
-    actor_fc_layers: (200, 100)
-    value_fc_layers: (200, 100)
+    actor_fc_layers: (200, 150)
+    value_fc_layers: (150, 100)
 train_session:
   num_env_steps: 300000
   run_parallel: False
   num_parallel_envs: 4
   collect_eps_per_iter: 2
-  replay_buff_capacity: 200
+  replay_buff_capacity: 250
   num_eval_episodes: 1
-  eval_interval: 100 # nb of steps between eval sessions
+  eval_interval: 50 # nb of steps between eval sessions
   summary_interval: 10
   use_tf_function: True
   summaries_flush_secs: 1
   log_interval: 10
-  train_checkpoint_interval: 100
-  policy_checkpoint_interval: 100
+  train_checkpoint_interval: 50
+  policy_checkpoint_interval: 50
